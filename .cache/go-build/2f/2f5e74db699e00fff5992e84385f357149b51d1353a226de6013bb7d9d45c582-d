@@ -1,7 +1,0 @@
-./common.go
-./input.go
-./input_linux.go
-./line.go
-./output.go
-./unixmode.go
-./width.go

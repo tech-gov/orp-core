@@ -1,6 +1,0 @@
-./auditagent.go
-./auditor.go
-./executable.go
-./init.go
-./metrics.go
-./utils.go

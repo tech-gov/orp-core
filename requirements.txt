@@ -1,9 +1,38 @@
+# requirements.txt — ORP Engine Python dependencies
+# Install via: ./python_prep.sh
+# Or manually: source .venv/bin/activate && pip install -r requirements.txt
+#
+# Version policy: pinned for reproducibility.
+# To upgrade: test against a staging deployment first.
+
+# ── WSGI server ──────────────────────────────────────────────────
+# Lowercase 'gunicorn' — PyPI canonical name (capital G fails on
+# some pip versions). Configured in _orp_core.sh orp_launch_engine:
+#   workers=1, threads=2, timeout=120, bind=127.0.0.1:FLASK_PORT
+gunicorn==21.2.0
+
+# ── Web framework ────────────────────────────────────────────────
 Flask==3.0.0
-Gunicorn==21.2.0
+
+# ── PDF processing ───────────────────────────────────────────────
 pypdf==4.2.1
 reportlab==4.0.7
+
+# ── QR code generation ───────────────────────────────────────────
 qrcode[pil]==7.4.2
+
+# ── Cryptography ─────────────────────────────────────────────────
 python-gnupg==0.5.2
-pytz==2024.1
-immudb-py==0.6.0
+
+# ── Immutable database client ────────────────────────────────────
+# WARNING: main.py uses the immudb-py 1.x API:
+#   ImmudbClient(f"{host}:{port}")
+#   client.login(user, password, database=db)
+#   client.set(key, value)
+# Version 0.6.0 has a completely different API and crashes on startup.
+# Do NOT downgrade below 1.4.0.
+immudb-py==1.4.0
+
+# ── Environment & timezone ───────────────────────────────────────
 python-dotenv==1.0.0
+pytz==2024.1

@@ -43,7 +43,6 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 # ── Prompt helper ─────────────────────────────────────────────────
-# Usage: ask VAR_NAME "Prompt text" "default value"
 ask() {
     local var="$1" msg="$2" default="$3"
     local val
@@ -115,16 +114,20 @@ ask GITHUB_PORTAL_URL "GitHub Pages verification portal URL" \
 # ── Section 4: System paths (auto-derived) ───────────────────────
 section "System Configuration (Auto-configured)"
 
-printf "  The following values are derived automatically from your\n"
-printf "  environment. They do not need to be changed unless you are\n"
-printf "  running a non-standard installation.\n\n"
+printf "  The following values are derived automatically. They do not\n"
+printf "  need to be changed unless you are running a non-standard setup.\n\n"
 
 FLASK_PORT=5000
 IMMUDB_HOST="127.0.0.1:3322"
 IMMUDB_USER="orp_operator"
 IMMUDB_DB="brgy_bunaodb"
 GITHUB_REPO_PATH="$SCRIPT_DIR"
-PKI_DIR="$HOME/orp_engine/ssl"
+
+# PKI_DIR — dot-prefixed hidden directory.
+# CRITICAL: This MUST match the default used by orp-pki-setup.sh,
+# nginx-setup.sh, and master-bootstrap.sh — all use $HOME/.orp_engine/ssl.
+# The dot prefix keeps PKI files out of casual 'ls' listings.
+PKI_DIR="$HOME/.orp_engine/ssl"
 
 printf "  ${BOLD}%-25s${NC} %s\n" "Flask port:"       "$FLASK_PORT"
 printf "  ${BOLD}%-25s${NC} %s\n" "immudb host:port:" "$IMMUDB_HOST"
@@ -161,7 +164,6 @@ LGU_SIGNER_POSITION="$LGU_SIGNER_POSITION"
 LGU_TIMEZONE="Asia/Manila"
 
 # ── Operator Identity ─────────────────────────────────────────────
-# Used as the GPG key identity for ephemeral session keys.
 OPERATOR_GPG_EMAIL="$OPERATOR_GPG_EMAIL"
 
 # ── Repository & Public Ledger ────────────────────────────────────
@@ -169,17 +171,13 @@ GITHUB_REPO_PATH="$GITHUB_REPO_PATH"
 GITHUB_PORTAL_URL="$GITHUB_PORTAL_URL"
 
 # ── PKI Directory ─────────────────────────────────────────────────
-# Must match the directory used by orp-pki-setup.sh and nginx-setup.sh.
+# Dot-prefixed hidden directory — matches orp-pki-setup.sh and nginx-setup.sh.
 PKI_DIR="$PKI_DIR"
 
 # ── Flask / Gunicorn ──────────────────────────────────────────────
-# Gunicorn binds to this port internally. Nginx proxies to it.
-# Never expose this port directly to the network.
 FLASK_PORT=$FLASK_PORT
 
 # ── immudb ────────────────────────────────────────────────────────
-# IMMUDB_USER and IMMUDB_DB are also written by immudb-setup-operator.sh
-# to ~/.identity/db_secrets.env. Values here are fallback defaults.
 IMMUDB_HOST="$IMMUDB_HOST"
 IMMUDB_USER="$IMMUDB_USER"
 IMMUDB_DB="$IMMUDB_DB"
@@ -190,13 +188,12 @@ chmod 600 "$ENV_FILE"
 ok ".env written to: $ENV_FILE"
 ok "Permissions set to 600 (owner read/write only)."
 
-# ── Confirmation summary ──────────────────────────────────────────
-printf "\n"
-printf "${BOLD}${CYAN}━━━ Configuration Summary ━━━${NC}\n\n"
-printf "  ${BOLD}%-30s${NC} %s\n" "LGU Name:"           "$LGU_NAME"
+printf "\n${BOLD}${CYAN}━━━ Configuration Summary ━━━${NC}\n\n"
+printf "  ${BOLD}%-30s${NC} %s\n" "LGU Name:"             "$LGU_NAME"
 printf "  ${BOLD}%-30s${NC} %s\n" "Authorized Signatory:" "$LGU_SIGNER_NAME"
-printf "  ${BOLD}%-30s${NC} %s\n" "Position:"            "$LGU_SIGNER_POSITION"
-printf "  ${BOLD}%-30s${NC} %s\n" "Operator Email:"      "$OPERATOR_GPG_EMAIL"
-printf "  ${BOLD}%-30s${NC} %s\n" "Public Ledger URL:"   "$GITHUB_PORTAL_URL"
+printf "  ${BOLD}%-30s${NC} %s\n" "Position:"             "$LGU_SIGNER_POSITION"
+printf "  ${BOLD}%-30s${NC} %s\n" "Operator Email:"       "$OPERATOR_GPG_EMAIL"
+printf "  ${BOLD}%-30s${NC} %s\n" "Public Ledger URL:"    "$GITHUB_PORTAL_URL"
+printf "  ${BOLD}%-30s${NC} %s\n" "PKI Directory:"        "$PKI_DIR"
 printf "\n"
 printf "  ${DIM}To change any value: delete .env and re-run this script.${NC}\n\n"

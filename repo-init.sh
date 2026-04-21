@@ -1,343 +1,199 @@
 #!/usr/bin/env bash
-# repo-init.sh
-# Initialize repository structure for OpenResPublica
+# repo-init.sh — ORP Engine Repository Structure Initialization
+# ─────────────────────────────────────────────────────────────────
+# Creates the docs/records/ directory tree, sentinel .gitkeep files,
+# an empty manifest.json, and the .gitignore.
+#
+# Idempotent — safe to re-run on an existing repo.
+# ─────────────────────────────────────────────────────────────────
 
 set -euo pipefail
 
-echo "=== Repository Structure Initialization ==="
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GREEN='\033[0;32m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
+BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
+ok()   { printf "${GREEN}[✔]${NC} %s\n" "$1"; }
+info() { printf "${CYAN}[*]${NC} %s\n" "$1"; }
+warn() { printf "${GOLD}[!]${NC} %s\n" "$1"; }
 
-echo "[*] Repository: $REPO_DIR"
+clear
+printf "${BOLD}${CYAN}"
+cat <<'BANNER'
+  ╔══════════════════════════════════════════════════════════╗
+  ║     ORP ENGINE — Repository Structure Initialization    ║
+  ╚══════════════════════════════════════════════════════════╝
+BANNER
+printf "${NC}\n"
+printf "  ${DIM}Repository root: %s${NC}\n\n" "$SCRIPT_DIR"
 
-# ═══════════════════════════════════════════════════════════════════
-# Create Directory Structure
-# ═══════════════════════════════════════════════════════════════════
+# ── ORP Engine directory structure ───────────────────────────────
+# This matches the actual structure main.py and Flask expect.
+# Do NOT create app/, routes/, utils/, models/, config/, tests/ —
+# those are generic scaffold patterns that do not belong here.
+info "Creating ORP Engine directory structure..."
 
-echo "[*] Creating directory structure..."
+mkdir -p "$SCRIPT_DIR/docs/records"
+mkdir -p "$SCRIPT_DIR/templates"
+mkdir -p "$SCRIPT_DIR/static/css"
+mkdir -p "$SCRIPT_DIR/static/js"
 
-# Documentation
-mkdir -p "$REPO_DIR/docs/records"
-mkdir -p "$REPO_DIR/docs/api"
-mkdir -p "$REPO_DIR/docs/guides"
+ok "Directories created."
 
-# Application structure
-mkdir -p "$REPO_DIR/templates"
-mkdir -p "$REPO_DIR/static/css"
-mkdir -p "$REPO_DIR/static/js"
-mkdir -p "$REPO_DIR/static/images"
+# ── .gitkeep sentinels ────────────────────────────────────────────
+# Git does not track empty directories. .gitkeep files let us commit
+# the directory structure without any real content yet.
+info "Creating .gitkeep sentinels..."
 
-# Python application
-mkdir -p "$REPO_DIR/app"
-mkdir -p "$REPO_DIR/app/routes"
-mkdir -p "$REPO_DIR/app/utils"
-mkdir -p "$REPO_DIR/app/models"
+touch "$SCRIPT_DIR/docs/.gitkeep"
+touch "$SCRIPT_DIR/docs/records/.gitkeep"
+touch "$SCRIPT_DIR/static/css/.gitkeep"
+touch "$SCRIPT_DIR/static/js/.gitkeep"
 
-# Configuration
-mkdir -p "$REPO_DIR/config"
+ok ".gitkeep sentinels created."
 
-# Tests (optional)
-mkdir -p "$REPO_DIR/tests"
+# ── manifest.json ─────────────────────────────────────────────────
+# IMPORTANT: main.py's update_manifest() does json.load() and expects
+# a flat JSON array (list), then calls records.insert(0, new_record).
+# If manifest.json contains a dict instead of a list, the first upload
+# will crash with: AttributeError: 'dict' object has no attribute 'insert'
+#
+# Correct schema: [] (empty array — main.py appends to this)
+# Wrong schema:   {"records": [], "total": 0} (dict — crashes main.py)
+MANIFEST="$SCRIPT_DIR/docs/records/manifest.json"
+if [ ! -f "$MANIFEST" ]; then
+    info "Creating manifest.json (empty array)..."
+    # Plain empty array — main.py inserts records at index 0, newest first.
+    printf '[]' > "$MANIFEST"
+    ok "manifest.json created."
+else
+    warn "manifest.json already exists — skipping."
+    # Validate it is a JSON array, not a dict
+    if command -v python3 >/dev/null 2>&1; then
+        if python3 -c "
+import json, sys
+with open('$MANIFEST') as f:
+    data = json.load(f)
+if not isinstance(data, list):
+    print('WRONG: manifest.json is a dict, not an array')
+    sys.exit(1)
+" 2>/dev/null; then
+            ok "manifest.json schema is correct (array)."
+        else
+            warn "manifest.json has wrong schema (expected array, got dict)."
+            warn "Backing up and replacing with empty array..."
+            cp "$MANIFEST" "${MANIFEST}.bak"
+            printf '[]' > "$MANIFEST"
+            ok "manifest.json reset to empty array. Backup: ${MANIFEST}.bak"
+        fi
+    fi
+fi
 
-# Logs (git-ignored)
-mkdir -p "$REPO_DIR/logs"
+# ── .gitignore ────────────────────────────────────────────────────
+GITIGNORE="$SCRIPT_DIR/.gitignore"
+if [ ! -f "$GITIGNORE" ]; then
+    info "Creating .gitignore..."
 
-echo "[✓] Directory structure created"
+    cat > "$GITIGNORE" <<'GITIGNORE_EOF'
+# ORP Engine — .gitignore
+# ─────────────────────────────────────────────────────────────────
 
-# ═══════════════════════════════════════════════════════════════════
-# Create .gitignore
-# ═══════════════════════════════════════════════════════════════════
+# Python virtualenv
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
 
-echo "[*] Creating .gitignore..."
+# Environment file (contains LGU config — not a secret, but not committed)
+.env
 
-cat > "$REPO_DIR/.gitignore" << 'EOGITIGNORE'
-# ═══════════════════════════════════════════════════════════════════
-# Operating System & Editors
-# ═══════════════════════════════════════════════════════════════════
+# immudb vault data (managed by immudb, not git)
+.orp_vault/
 
+# PKI directory — private keys must NEVER be committed.
+# Path matches PKI_DIR in .env: $HOME/.orp_engine/ssl
+# This .gitignore excludes it relative to repo root in case
+# someone symlinks or copies it inside the repo accidentally.
+.orp_engine/
+
+# Identity secrets
+.identity/
+
+# OS artifacts
 .DS_Store
 Thumbs.db
+
+# Editor artifacts
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
-.sublime-project
-.sublime-workspace
 
-# ═══════════════════════════════════════════════════════════════════
-# Python Virtual Environment
-# ═══════════════════════════════════════════════════════════════════
-
-.venv/
-venv/
-ENV/
-env/
-__pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-dist/
-build/
-*.egg
-.pytest_cache/
-
-# ════��══════════════════════════════════════════════════════════════
-# Environment & Configuration (SECRETS)
-# ═══════════════════════════════════════════════════════════════════
-
-.env
-.env.local
-.env.*.local
-config/.env
-config/secrets.json
-
-# ═══════════════════════════════════════════════════════════════════
-# Identity & Security
-# ═══════════════════════════════════════════════════════════════════
-
-.identity/
-.identity/**
-.ssh/
-.gnupg/
-.gnupg/**
-*.key
-*.pem
-*.crt
-*.p12
-.orp_engine/
-.orp_engine/**
-
-# ═══════════════════════════════════════════════════════════════════
-# Database & Runtime Data
-# ═══════════════════════════════════════════════════════════════════
-
-.orp_vault/
-.orp_vault/**
-immudb-data/
-*.db
-*.sqlite
-*.sqlite3
-data/
+# Logs
 *.log
-*.pid
-
-# ═══════════════════════════════════════════════════════════════════
-# Build & Cache
-# ═══════════════════════════════════════════════════════════════════
-
-.cache/
-.cache/**
-.cache/go-build/
-.cache/go-build/**
-immudb-src/
-node_modules/
-.coverage
-htmlcov/
-
-# ═══════════════════════════════════════════════════════════════════
-# IDE & Development
-# ═══════════════════════════════════════════════════════════════════
-
-.vscode/settings.json
-.vscode/launch.json
-*.pyc
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# ═══════════════════════════════════════════════════════════════════
-# OS-Specific Files
-# ═══════════════════════════════════════════════════════════════════
-
-.bash_history
-.bash_logout
-.bash_profile
-.bashrc
-.cshrc
-.tcshrc
-.zsh_history
-
-# ═══════════════════════════════════════════════════════════════════
-# Logs & Temporary
-# ═══════════════════════════════════════════════════════════════════
-
-logs/
-*.log
-universal-setup.log
 orp-setup.log
 orp-timezone-setup.log
-fedora-timezone.log
 
-# ═══════════════════════════════════════════════════════════════════
-# Generated Documentation
-# ═══════════════════════════════════════════════════════════════════
-
-site/
-docs/_build/
-.doctrees/
-
-# ═══════════════════════════════════════════════════════════════════
-# Temporary Generated Files
-# ════════════════════════════════════════════════════════════���══════
-
+# Temporary files
 *.tmp
 *.bak
-*.swp
-*~
-.#*
+GITIGNORE_EOF
 
-EOGITIGNORE
-
-echo "[✓] .gitignore created"
-
-# ═══════════════════════════════════════════════════════════════════
-# Create .gitkeep files for empty directories
-# ═══════════════════════════════════════════════════════════════════
-
-echo "[*] Creating .gitkeep files for version control..."
-
-touch "$REPO_DIR/docs/records/.gitkeep"
-touch "$REPO_DIR/docs/api/.gitkeep"
-touch "$REPO_DIR/docs/guides/.gitkeep"
-touch "$REPO_DIR/app/routes/.gitkeep"
-touch "$REPO_DIR/app/utils/.gitkeep"
-touch "$REPO_DIR/app/models/.gitkeep"
-touch "$REPO_DIR/config/.gitkeep"
-touch "$REPO_DIR/tests/.gitkeep"
-touch "$REPO_DIR/logs/.gitkeep"
-
-echo "[✓] .gitkeep files created"
-
-# ═══════════════════════════════════════════════════════════════════
-# Initialize docs/records Directory
-# ═══════════════════════════════════════════════════════════════════
-
-echo "[*] Initializing docs/records structure..."
-
-cat > "$REPO_DIR/docs/records/manifest.json" << 'EOMANIFEST'
-{
-  "version": "1.0.0",
-  "timestamp": "2025-01-01T00:00:00Z",
-  "total_records": 0,
-  "records": []
-}
-EOMANIFEST
-
-echo "[✓] manifest.json created"
-
-# ═══════════════════════════════════════════════════════════════════
-# Initialize Git Repository
-# ═══════════════════════════════════════════════════════════════════
-
-echo "[*] Initializing Git repository..."
-
-cd "$REPO_DIR"
-
-if [ -d .git ]; then
-    echo "[✓] Git repository already initialized"
+    ok ".gitignore created."
 else
+    warn ".gitignore already exists — skipping."
+fi
+
+# ── Git initialization ────────────────────────────────────────────
+cd "$SCRIPT_DIR"
+
+if [ ! -d .git ]; then
+    info "Initializing git repository..."
     git init
-    git config user.name "OpenResPublica Setup"
-    git config user.email "setup@openrespublica.local"
-    echo "[✓] Git repository initialized"
-fi
-
-# ═══════════════════════════════════════════════════════════════════
-# Create Initial Commit
-# ═══════════════════════════════════════════════════════════════════
-
-echo "[*] Creating initial commit..."
-
-# Check if there are changes to commit
-if [ -n "$(git status --short)" ]; then
-    git add .gitignore docs/records/manifest.json
-    git add docs/**/.gitkeep app/**/.gitkeep config/.gitkeep tests/.gitkeep logs/.gitkeep
-    
-    if git commit -m "init: repository structure" 2>/dev/null; then
-        echo "[✓] Initial commit created"
-    else
-        echo "[!] No changes to commit or already committed"
-    fi
+    git branch -M main 2>/dev/null || true
+    ok "Git repository initialized on branch: main"
 else
-    echo "[!] No changes to commit"
+    ok "Git repository already initialized."
 fi
 
-# ═══════════════════════════════════════════════════════════════════
-# Display Repository Map
-# ═══════════════════════════════════════════════════════════════════
+# ── Initial commit ───────────────────────────────────────────────
+# Use explicit paths instead of ** glob — globstar is not enabled
+# by default in bash and ** would silently add nothing.
+info "Staging initial files..."
 
-echo ""
-echo "╔═════════════════════════════════════════════════���══════╗"
-echo "║  Repository Structure Initialized                     ║"
-echo "╚════════════════════════════════════════════════════════╝"
-echo ""
+git add .gitignore                       2>/dev/null || true
+git add docs/.gitkeep                   2>/dev/null || true
+git add docs/records/.gitkeep           2>/dev/null || true
+git add docs/records/manifest.json      2>/dev/null || true
+git add static/css/.gitkeep             2>/dev/null || true
+git add static/js/.gitkeep              2>/dev/null || true
 
-tree -L 2 -a "$REPO_DIR" 2>/dev/null || find "$REPO_DIR" -maxdepth 2 -type d | sort | sed 's|[^/]*/|  |g'
+if git diff --cached --quiet 2>/dev/null; then
+    warn "No new changes to commit."
+else
+    git commit -m "init: repository structure" 2>/dev/null \
+        && ok "Initial commit created." \
+        || warn "Commit skipped (git user may not be configured yet)."
+fi
 
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━��━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Directory Descriptions"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
+# ── Summary ──────────────────────────────────────────────────────
+printf "\n${BOLD}${CYAN}━━━ Repository Structure ━━━${NC}\n\n"
+printf "  %s\n" "$SCRIPT_DIR"
+printf "  ├── docs/\n"
+printf "  │   ├── .gitkeep\n"
+printf "  │   └── records/\n"
+printf "  │       ├── .gitkeep\n"
+printf "  │       └── manifest.json   ← empty [] array, appended by main.py\n"
+printf "  ├── templates/              ← portal.html goes here\n"
+printf "  ├── static/\n"
+printf "  │   ├── css/                ← style.css goes here\n"
+printf "  │   └── js/                 ← portal.js goes here\n"
+printf "  ├── main.py\n"
+printf "  ├── requirements.txt\n"
+printf "  ├── .env                    ← git-ignored, created by orp-env-bootstrap.sh\n"
+printf "  └── .gitignore\n\n"
 
-cat <<'EODESC'
-docs/
-  ├── records/          → JSON audit trail (auto-generated)
-  ├── api/              → API documentation
-  └── guides/           → User & developer guides
-
-app/
-  ├── routes/           → Flask route handlers
-  ├── utils/            → Helper functions
-  └── models/           → Database models
-
-templates/               → Jinja2 HTML templates
-static/
-  ├── css/              → Stylesheets
-  ├── js/               → JavaScript
-  └── images/           → Images & assets
-
-config/                  → Configuration files
-
-tests/                   → Unit & integration tests
-
-logs/                    → Runtime logs (git-ignored)
-
-.env                     → Environment variables (git-ignored)
-.gitignore              → Git exclusion rules
-README.md               → Project documentation
-requirements.txt        → Python dependencies
-
-setup scripts:
-  ├── master-bootstrap.sh
-  ├── orp-env-bootstrap.sh
-  ├── orp-timezone-setup.sh
-  ├── immudb_setup.sh
-  ├── immudb-setup-operator.sh
-  ├── orp-pki-setup.sh
-  ├── nginx-setup.sh
-  ├── python_prep.sh
-  ├── run_orp.sh
-  └── run_orp-gum.sh
-
-EODESC
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Git Status"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-git status --short || true
-
-echo ""
-echo "✅ Repository initialized successfully"
-echo ""
-echo "📋 Next steps:"
-echo "   1) Add your application files to app/"
-echo "   2) Add templates to templates/"
-echo "   3) Add static files to static/"
-echo "   4) Commit changes: git add . && git commit -m 'Add application'"
-echo "   5) Configure remote: git remote add origin <URL>"
-echo "   6) Push to GitHub: git push -u origin main"
-echo ""
+ok "Repository structure initialized."

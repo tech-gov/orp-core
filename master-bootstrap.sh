@@ -180,6 +180,7 @@ run_step "8/9" "Repository Directory Structure" \
     "$SCRIPT_DIR/docs/records/manifest.json"
 
 # ── Final summary ─────────────────────────────────────────────────
+# ── Final summary ─────────────────────────────────────────────────
 hdr "Setup Complete ✔"
 printf "\n"
 ok "ORP Engine environment is ready."
@@ -187,33 +188,27 @@ printf "\n"
 
 PKI_FINAL="${PKI_DIR:-$PKI_DIR_DEFAULT}"
 
-cat <<SUMMARY
-  ${BOLD}Next steps:${NC}
-
-  ${GOLD}1.${NC} Install the operator certificate in your browser:
-
-       Chrome / Edge:
-         Settings → Privacy → Manage certificates → Import
-         Select: ${BOLD}${PKI_FINAL}/operator_01.p12${NC}
-
-       Firefox:
-         Settings → Privacy → View Certificates → Import
-         Select: ${BOLD}${PKI_FINAL}/operator_01.p12${NC}
-
-  ${GOLD}2.${NC} Launch the engine:
-
-         ${BOLD}./run_orp.sh${NC}
-
-  ${GOLD}3.${NC} When prompted, paste the session SSH key to GitHub:
-
-         GitHub → Settings → SSH Keys → New SSH Key
-
-  ${GOLD}4.${NC} Open the portal in your browser:
-
-         ${BOLD}https://localhost:9443${NC}
-
-  ${DIM}Setup log: $LOG_FILE${NC}
-
-SUMMARY
+{
+    printf -e "  ${BOLD}Next steps:${NC}\n\n"
+    
+    printf -e "  ${GOLD}1.${NC} Install the operator certificate in your browser:\n\n"
+    printf -e "       Chrome / Edge:\n"
+    printf -e "         Settings → Privacy → Manage certificates → Import\n"
+    printf -e "         Select: ${BOLD}${PKI_FINAL}/operator_01.p12${NC}\n\n"
+    printf -e "       Firefox:\n"
+    printf -e "         Settings → Privacy → View Certificates → Import\n"
+    printf -e "         Select: ${BOLD}${PKI_FINAL}/operator_01.p12${NC}\n\n"
+    
+    printf -e "  ${GOLD}2.${NC} Launch the engine:\n\n"
+    printf -e "         ${BOLD}./run_orp.sh${NC}\n\n"
+    
+    printf -e "  ${GOLD}3.${NC} When prompted, paste the session SSH key to GitHub:\n\n"
+    printf -e "         GitHub → Settings → SSH Keys → New SSH Key\n\n"
+    
+    printf -e "  ${GOLD}4.${NC} Open the portal in your browser:\n\n"
+    printf -e "         ${BOLD}https://localhost:9443${NC}\n\n"
+    
+    printf -e "  ${DIM}Setup log: $LOG_FILE${NC}\n\n"
+} | tee -a "$LOG_FILE"
 
 log "Bootstrap complete at $(date)"

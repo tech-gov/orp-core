@@ -26,7 +26,7 @@ clear
 printf "${BOLD}${CYAN}"
 cat <<'BANNER'
   ╔══════════════════════════════════════════════════════════╗
-  ║     ORP ENGINE — ENVIRONMENT CONFIGURATION              ║
+  ║      ORP ENGINE — ENVIRONMENT CONFIGURATION              ║
   ╚══════════════════════════════════════════════════════════╝
 BANNER
 printf "${NC}\n"
@@ -78,67 +78,59 @@ while [ -z "$LGU_SIGNER_NAME" ]; do
 done
 
 hint "Example: Punong Barangay"
-hint "Other examples: Barangay Secretary, Barangay Captain"
 ask LGU_SIGNER_POSITION "Signatory's official position / title" "Punong Barangay"
 
 # ── Section 2: Operator ───────────────────────────────────────────
 section "Operator Configuration"
 
-printf "  The operator email is used as the identifier for the ephemeral\n"
-printf "  GPG session key generated at each engine startup. It does NOT\n"
-printf "  need to be a real email address, but it must be unique and\n"
-printf "  consistent across sessions.\n\n"
+printf "  The operator email is used as the identity for ephemeral GPG keys.\n"
+printf "  It must be consistent to maintain your cryptographic identity.\n\n"
 
 hint "Example: operator@bgy-bunao.gov.ph"
-hint "Example: orp-operator@yourdomain.gov.ph"
-hint "Example: barangay.bunao@openrespublica.local"
-ask OPERATOR_GPG_EMAIL "Operator GPG email (used for session key identity)" ""
+ask OPERATOR_GPG_EMAIL "Operator GPG email" ""
 while [[ "$OPERATOR_GPG_EMAIL" != *"@"* ]]; do
-    printf "  ${GOLD}[!]${NC} Must contain '@'. Enter a valid email address.\n\n"
+    printf "  ${GOLD}[!]${NC} Must contain '@'. Enter a valid identity email.\n\n"
     ask OPERATOR_GPG_EMAIL "Operator GPG email" ""
 done
 
-# ── Section 3: GitHub Integration ────────────────────────────────
+# ── Section 3: GitHub Ledger Integration ──────────────────────────
 section "GitHub Public Ledger"
 
-printf "  The public ledger is a GitHub Pages site where all document\n"
-printf "  records are published. Citizens can scan the QR code on any\n"
+printf "  To enable public verification, the engine publishes documents\n"
+printf "  to a GitHub Pages ledger. Citizens can scan the QR code on any\n"
 printf "  stamped document to reach this URL and verify it.\n\n"
 
-hint "Example: https://openrespublica.github.io/verify.html"
-hint "Format:  https://YOUR-ORG.github.io/verify.html"
-hint "If you don't have one yet, use the default OpenResPublica portal."
-ask GITHUB_PORTAL_URL "GitHub Pages verification portal URL" \
-    "https://openrespublica.github.io/verify.html"
+hint "Example username/org: openrespublica"
+read -rp "  GitHub Username or Organization: " GITHUB_OWNER
+GITHUB_OWNER="${GITHUB_OWNER:-}"
+
+hint "Example repo: brgy-bunao-ledger"
+read -rp "  GitHub Portal Repository Name [truthchain-ledger]: " GITHUB_PAGES_REPO
+GITHUB_PAGES_REPO="${GITHUB_PAGES_REPO:-truthchain-ledger}"
+
+if [ -n "$GITHUB_OWNER" ]; then
+    GITHUB_PORTAL_URL="https://${GITHUB_OWNER}.github.io/${GITHUB_PAGES_REPO}/verify.html"
+else
+    # Fallback to default if no owner is provided
+    GITHUB_PORTAL_URL="https://openrespublica.github.io/verify.html"
+fi
+
+ok "Public Ledger URL set to: $GITHUB_PORTAL_URL"
 
 # ── Section 4: System paths (auto-derived) ───────────────────────
 section "System Configuration (Auto-configured)"
-
-printf "  The following values are derived automatically. They do not\n"
-printf "  need to be changed unless you are running a non-standard setup.\n\n"
 
 FLASK_PORT=5000
 IMMUDB_HOST="127.0.0.1:3322"
 IMMUDB_USER="orp_operator"
 IMMUDB_DB="brgy_bunaodb"
 GITHUB_REPO_PATH="$SCRIPT_DIR"
-
-# PKI_DIR — dot-prefixed hidden directory.
-# CRITICAL: This MUST match the default used by orp-pki-setup.sh,
-# nginx-setup.sh, and master-bootstrap.sh — all use $HOME/.orp_engine/ssl.
-# The dot prefix keeps PKI files out of casual 'ls' listings.
 PKI_DIR="$HOME/.orp_engine/ssl"
 
-printf "  ${BOLD}%-25s${NC} %s\n" "Flask port:"       "$FLASK_PORT"
+printf "  ${BOLD}%-25s${NC} %s\n" "Flask port:"        "$FLASK_PORT"
 printf "  ${BOLD}%-25s${NC} %s\n" "immudb host:port:" "$IMMUDB_HOST"
-printf "  ${BOLD}%-25s${NC} %s\n" "immudb database:"  "$IMMUDB_DB"
-printf "  ${BOLD}%-25s${NC} %s\n" "immudb user:"      "$IMMUDB_USER"
-printf "  ${BOLD}%-25s${NC} %s\n" "Repository path:"  "$GITHUB_REPO_PATH"
 printf "  ${BOLD}%-25s${NC} %s\n" "PKI directory:"    "$PKI_DIR"
 printf "\n"
-
-hint "IMMUDB_USER and IMMUDB_DB are overridden at runtime by"
-hint "~/.identity/db_secrets.env (written by immudb-setup-operator.sh)."
 
 # ── Write .env ────────────────────────────────────────────────────
 section "Writing Configuration"
@@ -147,15 +139,6 @@ cat > "$ENV_FILE" <<EOF
 # .env — ORP Engine Configuration
 # Generated: $(date)
 # Deployment: $LGU_NAME
-#
-# SECURITY NOTES:
-#   - This file is chmod 600 (owner read/write only).
-#   - Do NOT commit this file to git (it is in .gitignore).
-#   - GNUPGHOME is intentionally absent — it is created in /dev/shm
-#     at runtime by _orp_core.sh and wiped at session end.
-#   - The immudb password is NOT stored here. It is prompted at
-#     engine startup by main.py via Python getpass() and kept
-#     in RAM only — never written to disk.
 
 # ── LGU Identity ──────────────────────────────────────────────────
 LGU_NAME="$LGU_NAME"
@@ -168,10 +151,11 @@ OPERATOR_GPG_EMAIL="$OPERATOR_GPG_EMAIL"
 
 # ── Repository & Public Ledger ────────────────────────────────────
 GITHUB_REPO_PATH="$GITHUB_REPO_PATH"
+GITHUB_OWNER="$GITHUB_OWNER"
+GITHUB_PAGES_REPO="$GITHUB_PAGES_REPO"
 GITHUB_PORTAL_URL="$GITHUB_PORTAL_URL"
 
 # ── PKI Directory ─────────────────────────────────────────────────
-# Dot-prefixed hidden directory — matches orp-pki-setup.sh and nginx-setup.sh.
 PKI_DIR="$PKI_DIR"
 
 # ── Flask / Gunicorn ──────────────────────────────────────────────
@@ -191,9 +175,6 @@ ok "Permissions set to 600 (owner read/write only)."
 printf "\n${BOLD}${CYAN}━━━ Configuration Summary ━━━${NC}\n\n"
 printf "  ${BOLD}%-30s${NC} %s\n" "LGU Name:"             "$LGU_NAME"
 printf "  ${BOLD}%-30s${NC} %s\n" "Authorized Signatory:" "$LGU_SIGNER_NAME"
-printf "  ${BOLD}%-30s${NC} %s\n" "Position:"             "$LGU_SIGNER_POSITION"
-printf "  ${BOLD}%-30s${NC} %s\n" "Operator Email:"       "$OPERATOR_GPG_EMAIL"
 printf "  ${BOLD}%-30s${NC} %s\n" "Public Ledger URL:"    "$GITHUB_PORTAL_URL"
-printf "  ${BOLD}%-30s${NC} %s\n" "PKI Directory:"        "$PKI_DIR"
 printf "\n"
 printf "  ${DIM}To change any value: delete .env and re-run this script.${NC}\n\n"

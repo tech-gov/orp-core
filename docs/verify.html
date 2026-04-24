@@ -136,8 +136,9 @@
                 </div>
             ` : '';
 
-            // Extract the hardware signature (Safely handling if it's missing)
-            const hwSig = data.data_signature?.hardware_seal || "N/A";
+            // Extract the GPG signature status from the audit record.
+            // hardware_seal (ESP32) is a Phase 2 feature — not written by main.py yet.
+            // Showing "N/A..." for a field that never exists is misleading; removed.
             const gpgSig = data.data_signature?.gpg_signature ? "Valid OpenPGP Signature" : "N/A";
 
             container.innerHTML = `
@@ -149,19 +150,19 @@
                     <div class="data-grid">
                         <div class="data-item">
                             <span class="data-label">Control Number</span>
-                            <span class="data-value" style="font-weight: 700; color: var(--navy-mid);">${data.control_number}</span>
+                            <span class="data-value" style="font-weight: 700; color: var(--navy-mid);">${data.control_number || '—'}</span>
                         </div>
                         <div class="data-item">
                             <span class="data-label">Document Type</span>
-                            <span class="data-value"><span class="badge">${data.document_type}</span></span>
+                            <span class="data-value"><span class="badge">${data.document_type || 'GENERAL'}</span></span>
                         </div>
                         <div class="data-item">
                             <span class="data-label">Date Issued</span>
-                            <span class="data-value">${data.timestamp}</span>
+                            <span class="data-value">${data.timestamp || '—'}</span>
                         </div>
                         <div class="data-item">
                             <span class="data-label">Authorized Signatory</span>
-                            <span class="data-value">${data.signer}<br><small style="color: var(--muted);">${data.position}</small></span>
+                            <span class="data-value">${data.signer || '—'}<br><small style="color: var(--muted);">${data.position || ''}</small></span>
                         </div>
                     </div>
 
@@ -174,7 +175,7 @@
                             <div class="crypto-icon">🔗</div>
                             <div class="crypto-text">
                                 <strong>Document Hash (SHA-256)</strong>
-                                <span>${data.sha256_hash}</span>
+                                <span>${data.sha256_hash || '—'}</span>
                             </div>
                         </div>
 
@@ -183,14 +184,6 @@
                             <div class="crypto-text">
                                 <strong>immudb Transaction ID</strong>
                                 <span>TxID: ${data.immudb_transaction_id || 'Anchored'}</span>
-                            </div>
-                        </div>
-
-                        <div class="crypto-item">
-                            <div class="crypto-icon">🛡️</div>
-                            <div class="crypto-text">
-                                <strong>Hardware Sovereign Seal (ESP32)</strong>
-                                <span>${hwSig.substring(0, 40)}...</span>
                             </div>
                         </div>
                         

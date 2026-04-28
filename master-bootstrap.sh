@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# master-bootstrap.sh — ORP Engine Master Setup Orchestrator (polished)
-# Installs system dependencies on Debian/Ubuntu, runs idempotent setup steps,
-# and deploys the portal to GitHub Pages at the end.
+# master-bootstrap.sh — ORP Engine Master Setup Orchestrator
+# Installs system dependencies, runs idempotent setup steps,
+# and deploys the portal to GitHub Pages.
 # Usage: chmod +x master-bootstrap.sh && ./master-bootstrap.sh
 
 set -euo pipefail
@@ -10,16 +10,36 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="${LOG_FILE:-$HOME/orp-setup.log}"
 ENV_FILE="$SCRIPT_DIR/.env"
 
-# Colors
-RED='\033[0;31m'; GREEN='\033[0;32m'; GOLD='\033[0;33m'
-CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
+# ──────────────────────────────────────────────────────────────────
+# UTILITY FUNCTIONS
+# ──────────────────────────────────────────────────────────────────
 
-hdr()  { printf "\n${BOLD}${CYAN}╔══════════════════════════════════════════╗${NC}\n"; printf "${BOLD}${CYAN}║  %-40s║${NC}\n" "$1"; printf "${BOLD}${CYAN}╚══════════════════════════════════════════╝${NC}\n"; }
-ok()   { printf "${GREEN}[✔]${NC} %s\n" "$1" | tee -a "$LOG_FILE"; }
-info() { printf "${CYAN}[*]${NC} %s\n" "$1" | tee -a "$LOG_FILE"; }
-warn() { printf "${GOLD}[!]${NC} %s\n" "$1" | tee -a "$LOG_FILE"; }
-die()  { printf "${RED}[✘] ERROR: %s${NC}\n" "$1" >&2 | tee -a "$LOG_FILE"; exit 1; }
+banner() {
+  cat <<EOF
+
+╔═════════════════════════════════════════════════════════════════════╗
+║  $1
+║  $2
+╚═════════════════════════════════════════════════════════════════════╝
+
+EOF
+}
+
+section_header() {
+  printf "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+  printf "  %s\n" "$1"
+  printf "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+}
+
+ok()   { printf "[✔] %s\n" "$1" | tee -a "$LOG_FILE"; }
+info() { printf "[*] %s\n" "$1" | tee -a "$LOG_FILE"; }
+warn() { printf "[!] %s\n" "$1" | tee -a "$LOG_FILE"; }
+die()  { printf "[✘] ERROR: %s\n" "$1" >&2 | tee -a "$LOG_FILE"; exit 1; }
 log()  { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG_FILE"; }
+
+# ──────────────────────────────────────────────────────────────────
+# CONFIGURATION
+# ──────────────────────────────────────────────────────────────────
 
 REQUIRED_SCRIPTS=(
   "orp-timezone-setup.sh"
@@ -31,21 +51,22 @@ REQUIRED_SCRIPTS=(
   "nginx-setup.sh"
   "repo-init.sh"
 )
+
 REQUIRED_PKGS=(git jq curl python3 python3-pip python3-venv shellcheck)
 
+# ──────────────────────────────────────────────────────────────────
+# MAIN BOOTSTRAP
+# ──────────────────────────────────────────────────────────────────
+
 clear
-cat <<'BANNER'
-  ╔═══════════════════════════════════════════════════════════╗
-  ║   OPENRESPUBLICA — ORP ENGINE MASTER BOOTSTRAP           ║
-  ║   TruthChain Sovereign Document Issuance System          ║
-  ╚═══════════════════════════════════════════════════════════╝
-BANNER
+banner "OPENRESPUBLICA — ORP ENGINE MASTER BOOTSTRAP" \
+       "TruthChain Sovereign Document Issuance System"
 
 log "Bootstrap started at $(date)"
 log "SCRIPT_DIR: $SCRIPT_DIR"
 
 # Preflight: install OS packages on Debian/Ubuntu
-hdr "0/9 — Checking system dependencies"
+section_header "STEP 0/9 — Checking System Dependencies"
 MISSING=()
 for pkg in "${REQUIRED_PKGS[@]}"; do
   if ! command -v "$pkg" >/dev/null 2>&1; then
@@ -83,14 +104,24 @@ printf "\n"
 warn "This script will install packages and configure services."
 read -rp "Press ENTER to begin, or Ctrl+C to abort... "
 
+# ──────────────────────────────────────────────────────────────────
+# STEP RUNNER
+# ──────────────────────────────────────────────────────────────────
+
 run_step() {
-  local step_num="$1"; local step_desc="$2"; local script_name="$3"; local skip_if="${4:-}"
-  hdr "${step_num} — ${step_desc}"
+  local step_num="$1"
+  local step_desc="$2"
+  local script_name="$3"
+  local skip_if="${4:-}"
+
+  section_header "STEP $step_num — $step_desc"
+
   if [ -n "$skip_if" ] && [ -e "$skip_if" ]; then
     warn "Already complete — skipping. Remove '$skip_if' to redo."
     log "SKIP: $step_desc"
     return 0
   fi
+
   log "START: $step_desc"
   bash "$SCRIPT_DIR/$script_name" 2>&1 | sed 's/^/    /' | tee -a "$LOG_FILE"
   local exit_code=${PIPESTATUS[0]}
@@ -100,6 +131,10 @@ run_step() {
   log "DONE: $step_desc"
   ok "${step_desc} complete."
 }
+
+# ──────────────────────────────────────────────────────────────────
+# EXECUTION
+# ──────────────────────────────────────────────────────────────────
 
 run_step "1/9" "Timezone (Asia/Manila)" "orp-timezone-setup.sh"
 run_step "2/9" "Environment Configuration (.env & docs/config.json)" "orp-env-bootstrap.sh" "$ENV_FILE"
@@ -114,29 +149,35 @@ run_step "6/9" "Sovereign PKI (mTLS Certificates)" "orp-pki-setup.sh" "${PKI_DIR
 run_step "7/9" "Nginx mTLS Gateway" "nginx-setup.sh"
 run_step "8/9" "Repository Directory Structure" "repo-init.sh" "$SCRIPT_DIR/docs/records/manifest.json"
 
-# Always sync GitHub Pages at the end (docs/config.json must exist)
-hdr "9/9 — Build & Deploy Public Portal"
+# Always sync GitHub Pages at the end
+section_header "STEP 9/9 — Build & Deploy Public Portal"
 if [ -f "$SCRIPT_DIR/github-pages-setup.sh" ]; then
   bash "$SCRIPT_DIR/github-pages-setup.sh"
 else
   warn "github-pages-setup.sh missing — skipping portal deployment."
 fi
 
-hdr "Setup Complete ✔"
+# ──────────────────────────────────────────────────────────────────
+# COMPLETION SUMMARY
+# ──────────────────────────────────────────────────────────────────
+
+clear
+banner "OPENRESPUBLICA — SETUP COMPLETE" \
+       "ORP Engine Environment Ready for Operation"
+
 ok "ORP Engine environment is ready."
 PKI_FINAL="${PKI_DIR:-$PKI_DIR_DEFAULT}"
-{
-  printf "  ${GOLD}Next steps:${NC}\n\n"
-  printf "  ${GOLD}1.${NC} Install the operator certificate in your browser:\n\n"
-  printf "       Chrome/Edge: Settings → Privacy → Manage certificates → Import\n"
-  printf "       Select: ${BOLD}${PKI_FINAL}/operator_01.p12${NC}\n\n"
-  printf "  ${GOLD}2.${NC} Launch the engine:\n\n"
-  printf "       ${BOLD}./run_orp.sh${NC}\n\n"
-  printf "  ${GOLD}3.${NC} When prompted, paste the session SSH key to GitHub:\n\n"
-  printf "       GitHub → Settings → SSH Keys → New SSH Key\n\n"
-  printf "  ${GOLD}4.${NC} Open the portal in your browser:\n\n"
-  printf "       ${BOLD}https://localhost:9443${NC}\n\n"
-  printf "  ${DIM}Setup log: $LOG_FILE${NC}\n\n"
-} | tee -a "$LOG_FILE"
+
+printf "\n  NEXT STEPS:\n\n"
+printf "  1. Install operator certificate in your browser:\n\n"
+printf "       Chrome/Edge: Settings → Privacy → Manage certificates → Import\n"
+printf "       Select: %s/OPERATOR_01.P12\n\n" "$PKI_FINAL"
+printf "  2. Launch the engine:\n\n"
+printf "       ./run_orp.sh\n\n"
+printf "  3. When prompted, paste the session SSH key to GitHub:\n\n"
+printf "       GitHub → Settings → SSH Keys → New SSH Key\n\n"
+printf "  4. Open the portal in your browser:\n\n"
+printf "       https://localhost:9443\n\n"
+printf "  Setup log: %s\n\n" "$LOG_FILE"
 
 log "Bootstrap complete at $(date)"

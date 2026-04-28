@@ -58,7 +58,7 @@ info "Checking if venv module is available..."
 if ! python3 -m venv --help >/dev/null 2>&1; then
     # Determine Python version for package name
     PYTHON_VERSION_SHORT=$(python3 --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
-    
+
     die "python3-venv is not installed.
 
   On WSL2 Ubuntu, install with:
@@ -132,7 +132,7 @@ info "Verifying cryptographic and engine modules..."
 for entry in "${CRITICAL_MAP[@]}"; do
     pkg="${entry%%:*}"
     mod="${entry#*:}"
-    
+
     if python3 -c "import $mod" 2>/dev/null; then
         ok "Module '$mod' ($pkg) is functional"
     else
